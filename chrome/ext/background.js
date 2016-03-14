@@ -639,10 +639,16 @@
   ext.windows = {
     create: function(createData, callback)
     {
-      chrome.windows.create(createData, function(createdWindow)
+      if ("create" in chrome.windows){
+        chrome.windows.create(createData, function(createdWindow)
+        {
+            afterTabLoaded(callback)(createdWindow.tabs[0]);
+        });
+      }
+      else
       {
-        afterTabLoaded(callback)(createdWindow.tabs[0]);
-      });
+        ext.pages.open(createData.url, callback);
+      }
     }
   };
 })();
