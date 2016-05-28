@@ -546,7 +546,9 @@
     {
       sender.page = new Page(rawSender.tab);
       sender.frame = {
-        url: new URL(rawSender.url),
+        // In Edge requests from internal extension pages
+        // (protocol ms-browser-extension://) do no have a sender URL.
+        url: rawSender.url ? new URL(rawSender.url) : null,
         get parent()
         {
           var frames = framesOfTabs[rawSender.tab.id];
