@@ -1,9 +1,9 @@
-Adblock Plus for Chrome and Opera
-=================================
+Adblock Plus for Chrome, Opera and Edge
+=======================================
 
 This repository contains the platform-specific Adblock Plus source code for
-Chrome and Opera. It can be used to build Adblock Plus for these platforms,
-generic Adblock Plus code will be extracted from other repositories
+Chrome, Opera and Edge. It can be used to build Adblock Plus for these
+platforms, generic Adblock Plus code will be extracted from other repositories
 automatically (see _dependencies_ file).
 
 Building
@@ -19,26 +19,34 @@ Building
 
 ### Building the extension
 
-Run the following command in the project directory:
+Run one of the following commands in the project directory, depending on your
+target platform:
 
     ./build.py -t chrome build -k adblockpluschrome.pem
+    ./build.py -t edge build
 
 This will create a build with a name in the form
-_adblockpluschrome-1.2.3.nnnn.crx_
+_adblockpluschrome-1.2.3.nnnn.crx_ or _adblockplusedge-1.2.3.nnnn.appx_.
 Note that you don't need an existing signing key for Chrome, a new key
 will be created automatically if the file doesn't exist.
 
 ### Development environment
 
 To simplify the process of testing your changes you can create an unpacked
-development environment. For that run the following command:
+development environment. For that run one of the following commands:
 
     ./build.py -t chrome devenv
+    ./build.py -t edge devenv
 
-This will create a _devenv.chrome_ directory in the repository. In Chrome you
-should load the directory as an unpacked extension. After making changes to the
-source code re-run the command to update the development environment, the
-extension should reload automatically after a few seconds.
+This will create a _devenv.platform_ directory in the repository. In Chrome you
+should load _devenv.chrome_ as an unpacked extension directory. After making
+changes to the source code re-run the command to update the development
+environment, the extension should reload automatically after a few seconds.
+
+For Edge you should load _devenv.edge/Extension_ as an unpacked extension
+directory. Edge build does not automatically detect changes, so after
+rebuilding the extension you should manually force reloading it in Edge by
+hitting the _Reload Extension_ button.
 
 Running the unit tests
 ----------------------
