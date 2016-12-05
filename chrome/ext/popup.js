@@ -1,5 +1,7 @@
 (function()
 {
+  if ((typeof chrome == "undefined") || (typeof chrome.extension == "undefined"))
+    chrome = browser;
   var backgroundPage = chrome.extension.getBackgroundPage();
   window.ext = Object.create(backgroundPage.ext);
 

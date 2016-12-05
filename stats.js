@@ -96,11 +96,11 @@
   {
     var statsPage = document.getElementById("stats-page");
     var blockedPage = getBlockedPerPage(currentPage).toLocaleString();
-    i18n.setElementText(statsPage, "stats_label_page", [blockedPage]);
+    i18n.setElementText(statsPage, "stats_label_page", blockedPage);
     
     var statsTotal = document.getElementById("stats-total");
     var blockedTotal = Prefs.blocked_total.toLocaleString();
-    i18n.setElementText(statsTotal, "stats_label_total", [blockedTotal]);
+    i18n.setElementText(statsTotal, "stats_label_total", blockedTotal);
   }
   
   function share(ev)
