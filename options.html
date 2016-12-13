@@ -19,11 +19,10 @@
 
 <html>
 <head>
-<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
 <link type="text/css" href="jquery-ui/css/smoothness/jquery-ui-1.8.16.custom.css" rel="stylesheet" />
 <script type="text/javascript" src="jquery-ui/js/jquery-1.7.1.min.js"></script>
 <script type="text/javascript" src="jquery-ui/js/jquery-ui-1.8.16.custom.min.js"></script>
-<script type="text/javascript" src="lib/polyfills/promise.js"></script>
 <script type="text/javascript" src="lib/polyfills/fetch.js"></script>
 <script type="text/javascript" src="ext/common.js"></script>
 <script type="text/javascript" src="ext/content.js"></script>
@@ -99,11 +98,6 @@ button
 .subscriptionUpdate
 {
   color: #B0B0B0;
-}
-#restart-safari,
-.subscriptionUpdate.error
-{
-  color: #FF0000;
 }
 
 #rawFilters {
@@ -288,10 +282,6 @@ button
       </div>
       <div id="shouldShowNotificationsContainer" data-section="notifications">
         <input type="checkbox" id="shouldShowNotifications" /><label for="shouldShowNotifications" class="i18n_overlay_shownotifications_label"></label>
-      </div>
-      <div id="safariContentBlockerContainer">
-        <input type="checkbox" id="safariContentBlocker" /><label for="safariContentBlocker" class="i18n_safari_content_blocker"></label>
-        <span id="restart-safari" class="i18n_safari_restart"></span>
       </div>
     </p>
 

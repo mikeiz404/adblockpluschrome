@@ -345,16 +345,13 @@ function runInPageContext(fn, arg)
   document.documentElement.removeChild(script);
 }
 
-// Neither Chrome[1] nor Safari allow us to intercept WebSockets, and therefore
+// Chrome doesn't allow us to intercept WebSockets[1], and therefore
 // some ad networks are misusing them as a way to serve adverts and circumvent
 // us. As a workaround we wrap WebSocket, preventing blocked WebSocket
 // connections from being opened.
 // [1] - https://bugs.chromium.org/p/chromium/issues/detail?id=129353
 function wrapWebSocket()
 {
-  if (typeof WebSocket == "undefined")
-    return;
-
   var eventName = "abpws-" + Math.random().toString(36).substr(2);
 
   document.addEventListener(eventName, function(event)
@@ -465,7 +462,11 @@ ElemHide.prototype = {
     if (/\.(?:google|blogger)\.com$/.test(document.domain))
       return null;
 
-    var shadow = document.documentElement.createShadowRoot();
+    // Finally since some users have both AdBlock and Adblock Plus installed we
+    // have to consider how the two extensions interact. For example we want to
+    // avoid creating the shadowRoot twice.
+    var shadow = document.documentElement.shadowRoot ||
+                 document.documentElement.createShadowRoot();
     shadow.appendChild(document.createElement("shadow"));
 
     // Stop the website from messing with our shadow root (#4191, #4298).
@@ -474,6 +475,8 @@ ElemHide.prototype = {
       runInPageContext(function()
       {
         var ourShadowRoot = document.documentElement.shadowRoot;
+        if (!ourShadowRoot)
+          return;
         var desc = Object.getOwnPropertyDescriptor(Element.prototype, "shadowRoot");
         var shadowRoot = Function.prototype.call.bind(desc.get);
 
@@ -536,7 +539,8 @@ ElemHide.prototype = {
     for (var i = 0; i < selectors.length; i += this.selectorGroupSize)
     {
       var selector = selectors.slice(i, i + this.selectorGroupSize).join(", ");
-      this.style.sheet.addRule(selector, "display: none !important;");
+      this.style.sheet.insertRule(selector + "{display: none !important;}",
+                                  this.style.sheet.cssRules.length);
     }
   },
 
