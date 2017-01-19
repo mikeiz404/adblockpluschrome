@@ -57,7 +57,7 @@ function wrapper(baseMessage /* , [paramKeys] */)
     }
 
     // Edge 38.14393 silently fails when sendMessage is called with a callback
-    // parameter of null, so we work around that here.
+    // parameter of undefined, so we work around that here.
     // https://developer.microsoft.com/en-us/microsoft-edge/platform/issues/8504730/
     if (callback)
       ext.backgroundPage.sendMessage(message, callback);
