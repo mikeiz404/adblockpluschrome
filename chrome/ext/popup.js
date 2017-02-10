@@ -1,11 +1,11 @@
-(function()
-{
-  if ((typeof chrome == "undefined") || (typeof chrome.extension == "undefined"))
-    chrome = browser;
-  var backgroundPage = chrome.extension.getBackgroundPage();
-  window.ext = Object.create(backgroundPage.ext);
+"use strict";
 
-  ext.closePopup = function()
+{
+ if ((typeof chrome == "undefined") || (typeof chrome.extension == "undefined"))
+    chrome = browser;
+  const backgroundPage = chrome.extension.getBackgroundPage();
+  var ext = Object.create(backgroundPage.ext);
+  ext.closePopup = () =>
   {
     window.close();
   };
@@ -15,9 +15,9 @@
   ext.backgroundPage = {
     sendMessage: chrome.runtime.sendMessage,
 
-    getWindow: function()
+    getWindow()
     {
       return backgroundPage;
     }
   };
-})();
+}
