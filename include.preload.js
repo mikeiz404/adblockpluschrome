@@ -394,6 +394,7 @@ ElemHide.prototype = {
       // <html> element. If we have injected a style element before that
       // has been removed (the sheet property is null), create a new one.
       this.style = document.createElement("style");
+      this.style.id = 'ABPStyle';
       (this.shadow || document.head ||
                       document.documentElement).appendChild(this.style);
 
@@ -433,7 +434,8 @@ ElemHide.prototype = {
       let selector = preparedSelectors.slice(
         i, i + this.selectorGroupSize
       ).join(", ");
-      this.style.sheet.insertRule(selector + "{display: none !important;}",
+      // note: 'display: none' cannot be used as this will prevent the 'ad-detected' animation event from firing.
+      this.style.sheet.insertRule(selector + "{visibility: hidden !important; position: absolute !important; animation-name: ad-detected;}",
                                   this.style.sheet.cssRules.length);
     }
   },

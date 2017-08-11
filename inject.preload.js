@@ -118,6 +118,7 @@ function injected(eventName, injectedIntoContentWindow)
    * workaround for the lack of user style support in Chrome.
    * See https://bugs.chromium.org/p/chromium/issues/detail?id=632009&desc=2
    */
+  let originalShadowRoot = document.documentElement.shadowRoot;
   if ("shadowRoot" in Element.prototype)
   {
     let ourShadowRoot = document.documentElement.shadowRoot;
@@ -386,6 +387,172 @@ function injected(eventName, injectedIntoContentWindow)
     window.RTCPeerConnection = boundWrappedRTCPeerConnection;
   if ("webkitRTCPeerConnection" in window)
     window.webkitRTCPeerConnection = boundWrappedRTCPeerConnection;
+
+
+  function installMirage( debugEnabled )
+  {
+    let adElements = new WeakSet();
+    let adComputeds = new WeakSet();
+    let adBlockStyle = undefined;
+
+    function debug( )
+    {
+      if( debugEnabled )
+      {
+        let message = '[Mirage] ' + arguments[0];
+        arguments[0] = message;
+
+        console.log.apply(console, arguments);
+      }
+    }
+
+    function installKeyframe( )
+    {
+      let adEventStyle = document.createElement('style');
+      adEventStyle.innerText = '@keyframes ad-detected{}';
+      (document.head || document.documentElement).appendChild(adEventStyle);
+
+      document.addEventListener('animationstart', animationCallback);
+
+      function animationCallback( event )
+      {
+        if( event.animationName == 'ad-detected' )
+        {
+          // event propagation could be used to detect ad block, so disable it
+          event.stopPropagation();
+
+          let element = event.srcElement;
+
+          debug('[animationstart:ad-detected] (Ad Elements) += ', element);
+          adElements.add(element)
+        }
+      }
+    }
+
+    function installToggledFn( object, fnName, condFn )
+    {
+      if( !(fnName in object) ) throw 'Function \'' + fnName + '\' is not defined in ' + object;
+
+      var originalFn = object[fnName];
+      object[fnName] = makeToggledStyleFn(fnName, condFn, originalFn);
+    }
+
+    function installToggledPropertyGetter( object, propertyName, condFn )
+    {
+      var desc = Object.getOwnPropertyDescriptor(object, propertyName);
+      if( desc === undefined ) throw 'Property \'' + propertyName + '\' has no getter in ' + object;
+      var originalFn = desc.get;
+
+      Object.defineProperty(object, propertyName, {get: makeToggledStyleFn(propertyName, condFn, originalFn)});
+    }
+
+    function makeToggledStyleFn( fnName, condFn, originalFn )
+    {
+      return function( )
+      {
+        var result;
+        var debugStr = '';
+        if( condFn.call(this) )
+        { // hide styles
+          var that = this;
+          var thatArgs = arguments;
+
+          toggleAdBlockStyle(function( )
+          {
+            result = originalFn.apply(that, thatArgs);
+          });
+          debug('[Fn] ' + Object.getPrototypeOf(this).constructor.name + '.' + fnName + ': ', {arguments: arguments, result: result});
+        }
+        else
+        { // pass through
+          result = originalFn.apply(this, arguments);
+        }
+
+        return result;
+      }
+    }
+
+    function toggleAdBlockStyle( fn )
+    {
+      if( adBlockStyle === undefined )
+      {
+        adBlockStyle = originalShadowRoot.getElementById('ABPStyle');
+      }
+
+      if( adBlockStyle !== undefined ) adBlockStyle.disabled = true;
+      fn();
+      if( adBlockStyle !== undefined ) adBlockStyle.disabled = false;
+    }
+
+    function isAdElement( )
+    {
+      return adElements.has(this);
+    }
+
+    function isAdComputed( )
+    {
+      return adComputeds.has(this);
+    }
+
+    // install
+    debug("Installing keyframe:ad-dectected");
+    installKeyframe();
+
+    // patch HTMLElement
+    if( "HTMLElement" in window )
+    {
+      debug("Pathching HTMLElement.{offsetTop,offsetLeft,offsetWidth,offsetHeight,offsetParent}");
+
+      installToggledPropertyGetter(HTMLElement.prototype, 'offsetTop', isAdElement);
+      installToggledPropertyGetter(HTMLElement.prototype, 'offsetLeft', isAdElement);
+      installToggledPropertyGetter(HTMLElement.prototype, 'offsetWidth', isAdElement);
+      installToggledPropertyGetter(HTMLElement.prototype, 'offsetHeight', isAdElement);
+      installToggledPropertyGetter(HTMLElement.prototype, 'offsetParent', isAdElement);
+    }
+
+    // patch Element
+    if( "Element" in window )
+    {
+      debug("Pathching Element.{clientWidth,clientHeight}");
+
+      installToggledPropertyGetter(Element.prototype, 'clientWidth', isAdElement);
+      installToggledPropertyGetter(Element.prototype, 'clientHeight', isAdElement);
+    }
+
+    // patch CSSStyleDeclaration
+    if( "CSSStyleDeclaration" in window )
+    {
+      debug("Pathching CSSStyleDeclaration.getPropertyValue");
+
+      installToggledFn(CSSStyleDeclaration.prototype, 'getPropertyValue', isAdComputed);
+    }
+
+    // patch ComputedStyle
+    if( window.getComputedStyle )
+    {
+      debug("Pathching window.getComputedStyle");
+
+      let originalFn = window.getComputedStyle;
+      window.getComputedStyle = function( element )
+      {
+        let computed = originalFn.apply(this, arguments);
+
+        if( adElements.has(element) )
+        { // Note: There is an edge case where ad element detection will fail if a
+          // computed style was obtained before the element of that computed style
+          // was identified as an ad. However this does not currently seem to be an
+          // issue and more memory would be needed to cover this case (a mapping of
+          // computed styles to elements would need to be stored).
+          debug('[getComputedStyle] (Ad Computeds) += ', {computed: computed, element: element});
+          adComputeds.add(computed);
+        }
+
+        return computed;
+      }
+    }
+  }
+
+  installMirage(false);
 }
 
 if (document instanceof HTMLDocument)

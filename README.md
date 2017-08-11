@@ -1,90 +1,69 @@
-Adblock Plus for Chrome, Opera, Microsoft Edge and Firefox
-==========================================================
+# AdBlockPlus + "Mirage"
+A proof of concept generic method for blocking the detection of AdBlock.
 
-This repository contains the platform-specific Adblock Plus source code for
-Chrome, Opera, Microsoft Edge and Firefox. It can be used to build
-Adblock Plus for these platforms, generic Adblock Plus code will be extracted
-from other repositories automatically (see _dependencies_ file).
+## Overview
+This approach works by intercepting all element style inspection functions and disabling the ad block styles before the function call and re-enabling them after.
+This happens fast enough that the style changes are not visually seen (or repainted).
 
-Note that the Firefox extension built from this repository is the new
-[WebExtension](https://developer.mozilla.org/en-US/Add-ons/WebExtensions).
-The source code of the legacy Adblock Plus extension
-can be found [here](https://hg.adblockplus.org/adblockplus).
+However this approach is rather resource intensive as it triggers two style recalculations on *every* intercepted function call of an ad element.
+This can prove problematic where the intercepted functions are called in rapid succession such as the on scroll event, which has been observed on `www.washingtonpost.com`.
 
-Building
----------
+## Resource Blocking
+Unfortunately it is not clear how to generically bypass script blocking detection. JavaScript resource blocking can be detected pretty easily; for example a flag will not be set if the script is not executed. Custom scripts can be used to counter this but they will be ad block detector and or site specific, and will most likely need to change over time.
 
-### Requirements
+Therefore it is suggested that all resource blocking is disabled when trying to bypass adblock detection with this method.
 
-- [Mercurial](https://www.mercurial-scm.org/) or [Git](https://git-scm.com/) (whichever you used to clone this repository)
-- [Python 2.7](https://www.python.org)
-- [The Jinja2 module](http://jinja.pocoo.org/docs) (>= 2.8)
-- [The PIL module](http://www.pythonware.com/products/pil/)
-- For signed builds: [PyCrypto module](https://www.dlitz.net/software/pycrypto/)
+You can do that by adding these rules to whitelist all resources:
+```
+@@$genericblock
+@@$script
+```
 
-### Building the extension
+Finally some adblock rules seem to rely primarily on the resource not being loaded for blocking. You might see ads which have no element hiding rules for them.
 
-Run one of the following commands in the project directory, depending on your
-target platform:
+## Building, Etc.
+See [the original AdBlockPlus Readme](README.AdBlockPlus.md)
 
-    ./build.py -t chrome build -k adblockpluschrome.pem
-    ./build.py -t edge build
-    ./build.py -t gecko-webext build
+## Tested On
+- [Fuck Ad Block](https://fuckadblock.sitexw.fr)
+- [d3xt3r: Anti Adblock](http://d3xt3r.com/anti-adblock?test)
+- [Forbes.com](https://www.forbes.com/#7ff3a4692254)
+- [WashingtonPost.com](https://www.washingtonpost.com/politics/trump-dictated-sons-misleading-statement-on-meeting-with-russian-lawyer/2017/07/31/04c94f96-73ae-11e7-8f39-eeb7d3a2d304_story.html?tid=sm_tw&utm_term=.80b19f510879)
+- [ThePirateBay.org](https://thepiratebay.org/search/test/0/99/0)
 
-This will create a build with a name in the form
-_adblockpluschrome-1.2.3.nnnn.crx_, _adblockplusedge-1.2.3.nnnn.appx_ or
-_adblockplusfirefox-1.2.3.nnnn.xpi_.
+## Detailed Description
+Specific element style related functions are intercepted so that they return the value they would have returned if the ad block style was not applied.
+This is done by disabling ad block styles before the function call, evaluating the function, and reenabling the ad block styles. The object prototype functions intercepted are
+HTMLElement.{offsetTop,offsetLeft,offsetWidth,offsetHeight,offsetParent}, Element.{clientWidth,clientHeight}, and CSSStyleDeclaration.getPropertyValue.
 
-Note that you don't need an existing signing key for Chrome, a new key
-will be created automatically if the file doesn't exist.
+A weak set of ad elements and a weak set of computed styles for those ad elements are stored.
+The second set is necessary since the values it references are dynamically computed.
 
-The Microsoft Edge build _adblockplusedge-1.2.3.nnnn.appx_ is unsigned and
-is only useful for uploading into Windows Store, where it will be signed. For
-testing use the devenv build.
+To keep things snappy the ad block style has been modified to trigger an animation event ([more details](https://stackoverflow.com/questions/6997826/alternative-to-domnodeinserted)).
+The elements which trigger this event are added to the ad elements set.
+This is much faster than calling `querySelectorAll` on DOM mutations.
 
-The Firefox extension will be unsigned, and therefore is mostly only useful for
-upload to Mozilla Add-ons. You can also also load it for testing purposes under
-_about:debugging_ or by disabling signature enforcement in Firefox Nightly.
+Using this technique means `display: none` cannot be used to hide the ads since an animation event will not be triggered. Instead `visibility: hidden` and `position: absolute` are used for element hiding.
 
-### Development environment
 
-To simplify the process of testing your changes you can create an unpacked
-development environment. For that run one of the following commands:
+# Future Work
+This biggest issue here is performance. The only two ways around this that I can see are 1) Caching DOM style values, or 2) Computing style changes instead of toggling the style sheet and forcing  a layout computation.
 
-    ./build.py -t chrome devenv
-    ./build.py -t edge devenv
-    ./build.py -t gecko-webext devenv
+## Caching DOM Style
+### Element Caching
+The simplest approach is to cache the ad element's computed style when the ad block style is disabled.
+However the cache will need to be invalidated when *any* style changes, or a DOM element which affects the layout is added or removed. This last constraint could be relaxed if ad detection is not looking at the ad element's position.
 
-This will create a _devenv.*_ directory in the repository. You can load the
-directory as an unpacked extension, under _chrome://extensions_ in Chrome,
-under _about:debugging_ in Firefox or in _Extensions_ menu in Microsoft Edge,
-after enabling extension development features in _about:flags_.
-After making changes to the source code re-run the command to update the
-development environment. In Chrome and Firefox the extension should reload
-automatically after a few seconds.
+This might work pretty well if the DOM is not being modified very often.
 
-Builds for Microsoft Edge do not automatically detect changes, so after
-rebuilding the extension you should manually force reloading it in Edge by
-hitting the _Reload Extension_ button.
+### Parallel DOM
+A copy of the page's DOM is stored in the shadow root without any ad blocking styles applied. The parallel DOM is kept in sync via monitoring DOM mutations in the main page and applying them to the shadow DOM. A mapping of page ad elements to shadow ad elements will need to be stored. When a page's ad element style is inspected the style of the mapped shadow element will be returned.
 
-Running the unit tests
-----------------------
+I have some concerns about memory usage but my hunch is that the DOM, ignoring resources, is pretty small, and resource references will be shared between the page and shadow DOM since they are on the same page.
 
-To verify your changes you can use the unit test suite located in the _qunit_
-directory of the repository. In order to run the unit tests go to the
-extension's Options page, open the JavaScript Console and type in:
+This approach seems the most robust.
 
-    location.href = "qunit/index.html";
+## Computing Style Changes Ourselves
+Changes to DOM style are monitored and new styles parsed while ignoring the ad block styles. If an element blocking method such as `visibility: none;` is used then element layout will not need to be recomputed. This means that only the styles which affect the `visibility` state of the ad elements need to be parsed and stored. When an ad element is inspected only the stored `visibility` state needs to be returned.
 
-The unit tests will run automatically once the page loads.
-
-Linting
--------
-
-You can lint the code using [ESLint](http://eslint.org).
-
-    eslint *.js lib/ qunit/ ext/ chrome/
-
-You will need to set up ESLint and our configuration first, see
-[eslint-config-eyeo](https://hg.adblockplus.org/codingtools/file/tip/eslint-config-eyeo)
-for more information.
+This approach seems the most difficult.
