@@ -435,7 +435,7 @@ ElemHide.prototype = {
         i, i + this.selectorGroupSize
       ).join(", ");
       // note: 'display: none' cannot be used as this will prevent the 'ad-detected' animation event from firing.
-      this.style.sheet.insertRule(selector + "{visibility: hidden !important; position: absolute !important; animation-name: ad-detected;}",
+      this.style.sheet.insertRule(selector + "{visibility: hidden !important; position: absolute !important; top:-100%; left: -100%; animation-name: ad-detected;}",
                                   this.style.sheet.cssRules.length);
     }
   },
