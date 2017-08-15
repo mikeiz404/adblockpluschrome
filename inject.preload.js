@@ -391,85 +391,154 @@ function injected(eventName, injectedIntoContentWindow)
 
   function installMirage( debugEnabled )
   {
-    let adElements = new WeakSet();
-    let adComputeds = new WeakSet();
-    let adBlockStyle = undefined;
-
     function debug( )
     {
       if( debugEnabled )
       {
-        let message = '[Mirage] ' + arguments[0];
-        arguments[0] = message;
-
+        Array.prototype.unshift.call(arguments, '[Mirage]');
         console.log.apply(console, arguments);
       }
     }
 
-    function installKeyframe( )
+    class Cache
+    {
+      constructor( propertyFns )
+      {
+        this.valid = true;
+        this.cache = new Map();
+        this.propertyFns = propertyFns;
+      }
+
+      _debug( )
+      {
+        Array.prototype.unshift.call(arguments, '[cache]');
+        debug.apply(this, arguments);
+      }
+
+      _makeEntry( element )
+      {
+        let entry = {};
+        for( let key in this.propertyFns )
+        {
+          let fn = this.propertyFns[key];
+
+          entry[key] = fn.call(element);
+        }
+
+        return entry;
+      }
+
+      add( element )
+      {
+        if( !this.cache.has(element) )
+        {
+          this._debug('Add ', {key: element, value: undefined});
+
+          this.invalidate();
+          this.cache.set(element, undefined);
+        }
+      }
+
+      has( element )
+      {
+        return this.cache.has(element);
+      }
+
+      hasProperty( property )
+      {
+        return property in this.propertyFns;
+      }
+
+      get( element )
+      {
+        if( !this.valid ) this.update();
+
+        return this.cache.get(element);
+      }
+
+      delete( element )
+      {
+        if(this.cache.has(element)) this._debug('Remove ', {key: element});
+        this.cache.delete(element);
+      }
+
+      update( )
+      {
+        this._debug('Updating ' + this.cache.size + ' elements');
+
+        toggleAdBlockStyle(function( )
+        {
+          for( let element of this.cache.keys() )
+          {
+            let entry = this._makeEntry(element);
+            this.cache.set(element, this._makeEntry(element));
+            this._debug('Updated element: ', {element: element, entry: entry});
+          }
+        }.bind(this));
+
+        this.valid = true;
+      }
+
+      invalidate( )
+      {
+        if( this.valid ) this._debug('Invalidated');
+        this.valid = false;
+      }
+
+      isValid( )
+      {
+        return this.valid;
+      }
+    }
+
+    function addKeyframeStyle( )
     {
       let adEventStyle = document.createElement('style');
       adEventStyle.innerText = '@keyframes ad-detected{}';
       (document.head || document.documentElement).appendChild(adEventStyle);
-
-      document.addEventListener('animationstart', animationCallback);
-
-      function animationCallback( event )
-      {
-        if( event.animationName == 'ad-detected' )
-        {
-          // event propagation could be used to detect ad block, so disable it
-          event.stopPropagation();
-
-          let element = event.srcElement;
-
-          debug('[animationstart:ad-detected] (Ad Elements) += ', element);
-          adElements.add(element)
-        }
-      }
     }
 
-    function installToggledFn( object, fnName, condFn )
+    function installInterceptedGetPropertyValue( computedToElementMap, cache )
     {
-      if( !(fnName in object) ) throw 'Function \'' + fnName + '\' is not defined in ' + object;
+      let originalFn = CSSStyleDeclaration.prototype.getPropertyValue;
+      CSSStyleDeclaration.prototype.getPropertyValue = function( property )
+      {
+        let result;
+        if( computedToElementMap.has(this) && cache.hasProperty(property) )
+        {
+          let element = computedToElementMap.get(this);
+          result = cache.get(element)[property];
+          debug('[Fn] window.getComputedStyle: ', {element: element, property: property, result: result});
+        }
+        else
+        {
+          result = originalFn.apply(this, arguments);
+        }
 
-      var originalFn = object[fnName];
-      object[fnName] = makeToggledStyleFn(fnName, condFn, originalFn);
+        return result;
+      };
     }
 
-    function installToggledPropertyGetter( object, propertyName, condFn )
+    function installInterceptedPropertyGetter( cache, object, propertyName )
     {
       var desc = Object.getOwnPropertyDescriptor(object, propertyName);
       if( desc === undefined ) throw 'Property \'' + propertyName + '\' has no getter in ' + object;
       var originalFn = desc.get;
 
-      Object.defineProperty(object, propertyName, {get: makeToggledStyleFn(propertyName, condFn, originalFn)});
-    }
-
-    function makeToggledStyleFn( fnName, condFn, originalFn )
-    {
-      return function( )
+      Object.defineProperty(object, propertyName, {get: function( )
       {
-        var result;
-        var debugStr = '';
-        if( condFn.call(this) )
-        { // hide styles
-          var that = this;
-          var thatArgs = arguments;
-
-          toggleAdBlockStyle(function( )
-          {
-            result = originalFn.apply(that, thatArgs);
-          });
-          debug('[Fn] ' + Object.getPrototypeOf(this).constructor.name + '.' + fnName + ': ', {arguments: arguments, result: result});
+        if( cache.has(this) )
+        { // ad element
+          result = cache.get(this)[propertyName];
+          debug('[Fn] ' + Object.getPrototypeOf(this).constructor.name + '.' + propertyName + ': ', {result: result});
         }
         else
-        { // pass through
-          result = originalFn.apply(this, arguments);
+        { // non ad element
+          result = originalFn.call(this);
         }
 
         return result;
-      }
+      }});
     }
 
     function toggleAdBlockStyle( fn )
@@ -484,39 +553,77 @@ function injected(eventName, injectedIntoContentWindow)
       if( adBlockStyle !== undefined ) adBlockStyle.disabled = false;
     }
 
-    function isAdElement( )
-    {
-      return adElements.has(this);
-    }
+    // setup
+    let adBlockStyle = undefined;
+    let computedToElementMap = new WeakMap();
 
-    function isAdComputed( )
-    {
-      return adComputeds.has(this);
-    }
+    // create element property cache
+    let originalGetPropertyValue = CSSStyleDeclaration.prototype.getPropertyValue;
+    let cache = new Cache({
+      'offsetTop': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop').get,
+      'offsetLeft': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetLeft').get,
+      'offsetWidth': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth').get,
+      'offsetHeight': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight').get,
+      'offsetParent': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetParent').get,
+      'clientWidth': Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth').get,
+      'clientHeight': Object.getOwnPropertyDescriptor(Element.prototype, 'clientHeight').get,
+      'visibility': function( ){return originalGetPropertyValue.bind(this, 'visibility')},
+      'display': function( ){return originalGetPropertyValue.bind(this, 'display')},
+    });
 
-    // install
+    // register to ad element detected event
     debug("Installing keyframe:ad-dectected");
-    installKeyframe();
+    addKeyframeStyle();
+    document.addEventListener('animationstart', function( event )
+    {
+      if( event.animationName == 'ad-detected' )
+      {
+        let element = event.srcElement;
+        cache.add(element);
 
+        // event propagation could be used to detect ad block, so disable it
+        event.stopPropagation();
+      }
+    });
+
+    // register to cache invalidating events
+    new MutationObserver(function( mutations )
+    {
+      mutations.forEach(function( mutation )
+      {
+        mutation.removedNodes.forEach(function( element )
+        {
+          cache.delete(element);
+        });
+      });
+      // note: a node was either added, deleted, or had its style modified
+      cache.invalidate();
+    }).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributeFilter: ['style']
+    });
+
+    // intercept element style related fns
     // patch HTMLElement
     if( "HTMLElement" in window )
     {
       debug("Pathching HTMLElement.{offsetTop,offsetLeft,offsetWidth,offsetHeight,offsetParent}");
 
-      installToggledPropertyGetter(HTMLElement.prototype, 'offsetTop', isAdElement);
-      installToggledPropertyGetter(HTMLElement.prototype, 'offsetLeft', isAdElement);
-      installToggledPropertyGetter(HTMLElement.prototype, 'offsetWidth', isAdElement);
-      installToggledPropertyGetter(HTMLElement.prototype, 'offsetHeight', isAdElement);
-      installToggledPropertyGetter(HTMLElement.prototype, 'offsetParent', isAdElement);
+      installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetTop');
+      installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetLeft');
+      installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetWidth');
+      installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetHeight');
+      installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetParent');
     }
 
     // patch Element
     if( "Element" in window )
-    {
+     {
       debug("Pathching Element.{clientWidth,clientHeight}");
 
-      installToggledPropertyGetter(Element.prototype, 'clientWidth', isAdElement);
-      installToggledPropertyGetter(Element.prototype, 'clientHeight', isAdElement);
+      installInterceptedPropertyGetter(cache, Element.prototype, 'clientWidth');
+      installInterceptedPropertyGetter(cache, Element.prototype, 'clientHeight');
     }
 
     // patch CSSStyleDeclaration
@@ -524,10 +631,10 @@ function injected(eventName, injectedIntoContentWindow)
     {
       debug("Pathching CSSStyleDeclaration.getPropertyValue");
 
-      installToggledFn(CSSStyleDeclaration.prototype, 'getPropertyValue', isAdComputed);
+      installInterceptedGetPropertyValue(computedToElementMap, cache);
     }
 
-    // patch ComputedStyle
+    // patch window.getComputedStyle
     if( window.getComputedStyle )
     {
       debug("Pathching window.getComputedStyle");
@@ -537,14 +644,13 @@ function injected(eventName, injectedIntoContentWindow)
       {
         let computed = originalFn.apply(this, arguments);
 
-        if( adElements.has(element) )
+        if( cache.has(element) )
         { // Note: There is an edge case where ad element detection will fail if a
           // computed style was obtained before the element of that computed style
           // was identified as an ad. However this does not currently seem to be an
           // issue and more memory would be needed to cover this case (a mapping of
           // computed styles to elements would need to be stored).
-          debug('[getComputedStyle] (Ad Computeds) += ', {computed: computed, element: element});
-          adComputeds.add(computed);
+          computedToElementMap.set(computed, element);
         }
 
         return computed;
@@ -552,7 +658,7 @@ function injected(eventName, injectedIntoContentWindow)
     }
   }
 
-  installMirage(false);
+  installMirage(true);
 }
 
 if (document instanceof HTMLDocument)
