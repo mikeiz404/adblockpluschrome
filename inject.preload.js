@@ -118,9 +118,10 @@ function injected(eventName, injectedIntoContentWindow)
    * workaround for the lack of user style support in Chrome.
    * See https://bugs.chromium.org/p/chromium/issues/detail?id=632009&desc=2
    */
-  let originalShadowRoot = document.documentElement.shadowRoot;
+  let originalShadowRoot;
   if ("shadowRoot" in Element.prototype)
   {
+    originalShadowRoot = document.documentElement.shadowRoot;
     let ourShadowRoot = document.documentElement.shadowRoot;
     if (ourShadowRoot)
     {
@@ -505,7 +506,7 @@ function injected(eventName, injectedIntoContentWindow)
             this._debug('Timer triggering update')
             this.update();
           }
-          
+
           this.timerStarted = false;
           this.timerId = undefined;
         }.bind(this), wait);
@@ -571,14 +572,14 @@ function injected(eventName, injectedIntoContentWindow)
 
     function toggleAdBlockStyle( fn )
     {
-      if( adBlockStyle === undefined )
+      if( originalShadowRoot && !adBlockStyle )
       {
         adBlockStyle = originalShadowRoot.getElementById('ABPStyle');
       }
 
-      if( adBlockStyle !== undefined ) adBlockStyle.disabled = true;
+      if( adBlockStyle ) adBlockStyle.disabled = true;
       fn();
-      if( adBlockStyle !== undefined ) adBlockStyle.disabled = false;
+      if( adBlockStyle ) adBlockStyle.disabled = false;
     }
 
     // setup
