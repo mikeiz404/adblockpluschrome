@@ -406,6 +406,8 @@ function injected(eventName, injectedIntoContentWindow)
       {
         this.valid = true;
         this.cache = new Map();
+        this.timerStarted = false;
+        this.timerId = undefined;
         this.propertyFns = propertyFns;
       }
 
@@ -483,6 +485,32 @@ function injected(eventName, injectedIntoContentWindow)
       {
         if( this.valid ) this._debug('Invalidated');
         this.valid = false;
+        this._startUpdateTimer();
+      }
+
+      _startUpdateTimer( )
+      {
+        if( this.timerStarted )
+        {
+          window.clearTimeout(this.timerId)
+        }
+
+        // note: add randomness to wait so multiple update events, like on pages
+        // with many frames, are spread out
+        let wait = 100 + (Math.random() * 1000);
+        this.timerId = window.setTimeout(function( )
+        {
+          if( !this.isValid() )
+          {
+            this._debug('Timer triggering update')
+            this.update();
+          }
+          
+          this.timerStarted = false;
+          this.timerId = undefined;
+        }.bind(this), wait);
+
+        this.timerStarted = true;
       }
 
       isValid( )
