@@ -390,7 +390,7 @@ function injected(eventName, injectedIntoContentWindow)
     window.webkitRTCPeerConnection = boundWrappedRTCPeerConnection;
 
 
-  function installMirage( debugEnabled )
+  function installMirage( shadowRoot, debugEnabled )
   {
     function debug( )
     {
@@ -572,9 +572,9 @@ function injected(eventName, injectedIntoContentWindow)
 
     function toggleAdBlockStyle( fn )
     {
-      if( originalShadowRoot && !adBlockStyle )
+      if( shadowRoot && !adBlockStyle )
       {
-        adBlockStyle = originalShadowRoot.getElementById('ABPStyle');
+        adBlockStyle = shadowRoot.getElementById('ABPStyle');
       }
 
       if( adBlockStyle ) adBlockStyle.disabled = true;
@@ -687,7 +687,7 @@ function injected(eventName, injectedIntoContentWindow)
     }
   }
 
-  installMirage(true);
+  installMirage(originalShadowRoot, true);
 }
 
 if (document instanceof HTMLDocument)
