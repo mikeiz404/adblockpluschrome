@@ -1,6 +1,8 @@
 # AdBlockPlus + "Mirage"
 A generic method for preventing the detection of **element hiding**, a method of ad blocking.
 
+![Adblock Plus + "Mirage" Demo](mirage-demo.gif)
+
 ## Overview
 This approach works by intercepting all element style inspection functions and disabling the ad block styles before the function call and re-enabling them after.
 This happens fast enough that the style changes are not visually seen (or repainted).
@@ -59,7 +61,7 @@ However there is still room for improvement in computing an ad elements unblocke
 
 Some options worth exploring are:
 
-### Parallel DOM
+## Parallel DOM
 A copy of the page's DOM is stored in the shadow root without any ad blocking styles applied.
 The parallel DOM is kept in sync via monitoring DOM mutations in the main page and applying them to the shadow DOM.
 A mapping of page ad elements to shadow ad elements will need to be stored.
