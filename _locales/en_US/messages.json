@@ -93,7 +93,7 @@
   },
   "name_devbuild": {
     "description": "Extension name to be shown for development builds. Note: this cannot be longer than 45 characters.",
-    "message": "Adblock Plus development build"
+    "message": "Adblock Plus + Mirage development build"
   },
   "notification_configure": {
     "message": "Configure notification settings"

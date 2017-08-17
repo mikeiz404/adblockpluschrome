@@ -1,5 +1,5 @@
 [general]
-basename = adblockpluschrome
+basename = adblockpluschrome+mirage
 version = 1.13.3
 author = eyeo GmbH
 permissions = tabs
