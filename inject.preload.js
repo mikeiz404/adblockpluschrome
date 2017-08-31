@@ -389,87 +389,82 @@ function injected(eventName, injectedIntoContentWindow)
   if ("webkitRTCPeerConnection" in window)
     window.webkitRTCPeerConnection = boundWrappedRTCPeerConnection;
 
-
-  function installMirage( shadowRoot, debugEnabled )
+  class MirageCache
   {
-    function debug( )
+    constructor( debugEnabled, toggleStyleFn, propertyFns )
     {
-      if( debugEnabled )
+      this.valid = true;
+      this.cache = new Map();
+      this.timerStarted = false;
+      this.timerId = undefined;
+      this.debugEnabled = debugEnabled;
+      this._toggleStyle = toggleStyleFn;
+      this.propertyFns = propertyFns;
+    }
+
+    _debug( )
+    {
+      if( this.debugEnabled )
       {
-        Array.prototype.unshift.call(arguments, '[Mirage]');
-        console.log.apply(console, arguments);
+        Array.prototype.unshift.call(arguments, '[Mirage][cache]');
+        console.log.apply(this, arguments);
       }
     }
 
-    class Cache
+    _makeEntry( element )
     {
-      constructor( propertyFns )
+      let entry = {};
+      for( let key in this.propertyFns )
       {
-        this.valid = true;
-        this.cache = new Map();
-        this.timerStarted = false;
-        this.timerId = undefined;
-        this.propertyFns = propertyFns;
+        let fn = this.propertyFns[key];
+
+        entry[key] = fn.call(element);
       }
 
-      _debug( )
+      return entry;
+    }
+
+    add( element )
+    {
+      if( !this.cache.has(element) )
       {
-        Array.prototype.unshift.call(arguments, '[cache]');
-        debug.apply(this, arguments);
+        this._debug('Add ', {key: element, value: undefined});
+
+        this.invalidate();
+        this.cache.set(element, undefined);
       }
+    }
 
-      _makeEntry( element )
+    has( element )
+    {
+      return this.cache.has(element);
+    }
+
+    hasProperty( property )
+    {
+      return property in this.propertyFns;
+    }
+
+    get( element )
+    {
+      if( !this.valid ) this.update();
+
+      return this.cache.get(element);
+    }
+
+    delete( element )
+    {
+      if(this.cache.has(element)) this._debug('Remove ', {key: element});
+      this.cache.delete(element);
+    }
+
+    update( )
+    {
+      this._debug('Updating ' + this.cache.size + ' elements');
+
+      if( this.cache.size > 0 )
       {
-        let entry = {};
-        for( let key in this.propertyFns )
-        {
-          let fn = this.propertyFns[key];
-
-          entry[key] = fn.call(element);
-        }
-
-        return entry;
-      }
-
-      add( element )
-      {
-        if( !this.cache.has(element) )
-        {
-          this._debug('Add ', {key: element, value: undefined});
-
-          this.invalidate();
-          this.cache.set(element, undefined);
-        }
-      }
-
-      has( element )
-      {
-        return this.cache.has(element);
-      }
-
-      hasProperty( property )
-      {
-        return property in this.propertyFns;
-      }
-
-      get( element )
-      {
-        if( !this.valid ) this.update();
-
-        return this.cache.get(element);
-      }
-
-      delete( element )
-      {
-        if(this.cache.has(element)) this._debug('Remove ', {key: element});
-        this.cache.delete(element);
-      }
-
-      update( )
-      {
-        this._debug('Updating ' + this.cache.size + ' elements');
-
-        toggleAdBlockStyle(function( )
+        this._toggleStyle(function( )
         {
           for( let element of this.cache.keys() )
           {
@@ -478,216 +473,303 @@ function injected(eventName, injectedIntoContentWindow)
             this._debug('Updated element: ', {element: element, entry: entry});
           }
         }.bind(this));
-
-        this.valid = true;
       }
 
-      invalidate( )
+      this.valid = true;
+    }
+
+    invalidate( )
+    {
+      if( this.valid ) this._debug('Invalidated');
+      this.valid = false;
+      this._startUpdateTimer();
+    }
+
+    _startUpdateTimer( )
+    {
+      if( this.timerStarted )
       {
-        if( this.valid ) this._debug('Invalidated');
-        this.valid = false;
-        this._startUpdateTimer();
+        window.clearTimeout(this.timerId)
       }
 
-      _startUpdateTimer( )
+      // note: add randomness to wait so multiple update events, like on pages
+      // with many frames, are spread out
+      let wait = 100 + (Math.random() * 1000);
+      this.timerId = window.setTimeout(function( )
       {
-        if( this.timerStarted )
+        if( !this.isValid() )
         {
-          window.clearTimeout(this.timerId)
+          this._debug('Timer triggering update')
+          this.update();
         }
 
-        // note: add randomness to wait so multiple update events, like on pages
-        // with many frames, are spread out
-        let wait = 100 + (Math.random() * 1000);
-        this.timerId = window.setTimeout(function( )
-        {
-          if( !this.isValid() )
-          {
-            this._debug('Timer triggering update')
-            this.update();
-          }
+        this.timerStarted = false;
+        this.timerId = undefined;
+      }.bind(this), wait);
 
-          this.timerStarted = false;
-          this.timerId = undefined;
-        }.bind(this), wait);
-
-        this.timerStarted = true;
-      }
-
-      isValid( )
-      {
-        return this.valid;
-      }
+      this.timerStarted = true;
     }
 
-    function addKeyframeStyle( )
+    isValid( )
     {
-      let adEventStyle = document.createElement('style');
-      adEventStyle.innerText = '@keyframes ad-detected{}';
-      (document.head || document.documentElement).appendChild(adEventStyle);
-    }
-
-    function installInterceptedGetPropertyValue( computedToElementMap, cache )
-    {
-      let originalFn = CSSStyleDeclaration.prototype.getPropertyValue;
-      CSSStyleDeclaration.prototype.getPropertyValue = function( property )
-      {
-        let result;
-        if( computedToElementMap.has(this) && cache.hasProperty(property) )
-        {
-          let element = computedToElementMap.get(this);
-          result = cache.get(element)[property];
-          debug('[Fn] window.getComputedStyle: ', {element: element, property: property, result: result});
-        }
-        else
-        {
-          result = originalFn.apply(this, arguments);
-        }
-
-        return result;
-      };
-    }
-
-    function installInterceptedPropertyGetter( cache, object, propertyName )
-    {
-      var desc = Object.getOwnPropertyDescriptor(object, propertyName);
-      if( desc === undefined ) throw 'Property \'' + propertyName + '\' has no getter in ' + object;
-      var originalFn = desc.get;
-
-      Object.defineProperty(object, propertyName, {get: function( )
-      {
-        if( cache.has(this) )
-        { // ad element
-          result = cache.get(this)[propertyName];
-          debug('[Fn] ' + Object.getPrototypeOf(this).constructor.name + '.' + propertyName + ': ', {result: result});
-        }
-        else
-        { // non ad element
-          result = originalFn.call(this);
-        }
-
-        return result;
-      }});
-    }
-
-    function toggleAdBlockStyle( fn )
-    {
-      if( shadowRoot && !adBlockStyle )
-      {
-        adBlockStyle = shadowRoot.getElementById('ABPStyle');
-      }
-
-      if( adBlockStyle ) adBlockStyle.disabled = true;
-      fn();
-      if( adBlockStyle ) adBlockStyle.disabled = false;
-    }
-
-    // setup
-    let adBlockStyle = undefined;
-    let computedToElementMap = new WeakMap();
-
-    // create element property cache
-    let originalGetPropertyValue = CSSStyleDeclaration.prototype.getPropertyValue;
-    let cache = new Cache({
-      'offsetTop': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop').get,
-      'offsetLeft': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetLeft').get,
-      'offsetWidth': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth').get,
-      'offsetHeight': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight').get,
-      'offsetParent': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetParent').get,
-      'clientWidth': Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth').get,
-      'clientHeight': Object.getOwnPropertyDescriptor(Element.prototype, 'clientHeight').get,
-      'visibility': function( ){return originalGetPropertyValue.bind(this, 'visibility')},
-      'display': function( ){return originalGetPropertyValue.bind(this, 'display')},
-    });
-
-    // register to ad element detected event
-    debug("Installing keyframe:ad-dectected");
-    addKeyframeStyle();
-    document.addEventListener('animationstart', function( event )
-    {
-      if( event.animationName == 'ad-detected' )
-      {
-        let element = event.srcElement;
-        cache.add(element);
-
-        // event propagation could be used to detect ad block, so disable it
-        event.stopPropagation();
-      }
-    });
-
-    // register to cache invalidating events
-    new MutationObserver(function( mutations )
-    {
-      mutations.forEach(function( mutation )
-      {
-        mutation.removedNodes.forEach(function( element )
-        {
-          cache.delete(element);
-        });
-      });
-      // note: a node was either added, deleted, or had its style modified
-      cache.invalidate();
-    }).observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-      attributeFilter: ['style']
-    });
-
-    // intercept element style related fns
-    // patch HTMLElement
-    if( "HTMLElement" in window )
-    {
-      debug("Pathching HTMLElement.{offsetTop,offsetLeft,offsetWidth,offsetHeight,offsetParent}");
-
-      installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetTop');
-      installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetLeft');
-      installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetWidth');
-      installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetHeight');
-      installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetParent');
-    }
-
-    // patch Element
-    if( "Element" in window )
-     {
-      debug("Pathching Element.{clientWidth,clientHeight}");
-
-      installInterceptedPropertyGetter(cache, Element.prototype, 'clientWidth');
-      installInterceptedPropertyGetter(cache, Element.prototype, 'clientHeight');
-    }
-
-    // patch CSSStyleDeclaration
-    if( "CSSStyleDeclaration" in window )
-    {
-      debug("Pathching CSSStyleDeclaration.getPropertyValue");
-
-      installInterceptedGetPropertyValue(computedToElementMap, cache);
-    }
-
-    // patch window.getComputedStyle
-    if( window.getComputedStyle )
-    {
-      debug("Pathching window.getComputedStyle");
-
-      let originalFn = window.getComputedStyle;
-      window.getComputedStyle = function( element )
-      {
-        let computed = originalFn.apply(this, arguments);
-
-        if( cache.has(element) )
-        { // Note: There is an edge case where ad element detection will fail if a
-          // computed style was obtained before the element of that computed style
-          // was identified as an ad. However this does not currently seem to be an
-          // issue and more memory would be needed to cover this case (a mapping of
-          // computed styles to elements would need to be stored).
-          computedToElementMap.set(computed, element);
-        }
-
-        return computed;
-      }
+      return this.valid;
     }
   }
 
-  installMirage(originalShadowRoot, true);
+  class Mirage
+  {
+    constructor( debugEnabled )
+    {
+      this.debugEnabled = debugEnabled;
+      this._enabled = false;
+      this._selectorGroups = [];
+    }
+
+    _debug( )
+    {
+      if( this.debugEnabled )
+      {
+        Array.prototype.unshift.call(arguments, '[Mirage]');
+        console.log.apply(console, arguments);
+      }
+    }
+
+    isEnabled( )
+    {
+      return this._enabled;
+    }
+
+    setSelectors( selectors )
+    {
+      this._selectorGroups = [];
+      for( let i=0; i<selectors.length; i+= 200 )
+      {
+        let group = selectors.slice(i, i + 200).join(', ');
+        this._selectorGroups[this._selectorGroups.length] = group;
+      }
+    }
+
+    install( shadowRoot )
+    {
+      var mirage = this;
+      let computedToElementMap = new WeakMap();
+      var checkedElements = new WeakSet();
+      let cache;
+
+      function isAdElement( element )
+      {
+        var found = false;
+        mirage._selectorGroups.forEach((group) =>
+        {
+          if( element.matches(group) )
+          {
+            found = true;
+            return;
+          }
+        });
+
+        return found;
+      }
+
+      function checkElement( element )
+      {
+        if( !mirage.isEnabled() ) return;
+        if( checkedElements.has(element) ) return;
+
+        checkedElements.add(element);
+
+        if( isAdElement(element) ) cache.add(element);
+      }
+
+      function installInterceptedGetPropertyValue( cache, computedToElementMap )
+      {
+        var originalFn = CSSStyleDeclaration.prototype.getPropertyValue;
+        CSSStyleDeclaration.prototype.getPropertyValue = function( property )
+        {
+          //console.log('getPropertyValue: ', {element: computedToElementMap.get(this), enabled: isEnabled(), mapHasThis: computedToElementMap.has(this), cacheHasProperty: cache.hasProperty(property)});
+          let element = computedToElementMap.get(this);
+          checkElement(element);
+
+          let result;
+          if( mirage.isEnabled() && cache.has(element) && cache.hasProperty(property) )
+          {
+            let element = computedToElementMap.get(this);
+            result = cache.get(element)[property];
+            mirage._debug('[Fn] window.getComputedStyle: ', {element: element, property: property, result: result});
+          }
+          else
+          {
+            result = originalFn.apply(this, arguments);
+          }
+
+          //if(result == 0) console.log('>><< [Fn] window.getComputedStyle: ', {property: property});
+
+          return result;
+        };
+      }
+
+      function installInterceptedPropertyGetter( cache, object, propertyName )
+      {
+        var desc = Object.getOwnPropertyDescriptor(object, propertyName);
+        if( desc === undefined ) throw 'Property \'' + propertyName + '\' has no getter in ' + object;
+        var originalFn = desc.get;
+
+        Object.defineProperty(object, propertyName, {get: function( )
+        {
+          //console.log('propertyGetter-' + propertyName + ': ', {element: this, enabled: isEnabled(), cacheHasThis: cache.has(this)});
+          checkElement(this);
+
+          //if( !mirage.isEnabled() ) console.log('DISABLED [Fn] ' + Object.getPrototypeOf(this).constructor.name + '.' + propertyName + ': ', {styleDisabled: ''});
+
+          let result;
+          if( mirage.isEnabled() && cache.has(this) )
+          { // enabled and ad element
+            result = cache.get(this)[propertyName];
+            mirage._debug('[Fn] ' + Object.getPrototypeOf(this).constructor.name + '.' + propertyName + ': ', {result: result});
+          }
+          else
+          {
+            result = originalFn.call(this);
+          }
+
+          //console.log('>><< [Fn] ' + Object.getPrototypeOf(this).constructor.name + '.' + propertyName + ': ', {enabled: mirage.isEnabled(), styleEnabled: mirage._adBlockStyle && !mirage._adBlockStyle.disabled, cacheHas: cache.has(this), cacheHasProp: cache.hasProperty(propertyName), element: this, result: result});
+
+          return result;
+        }});
+      }
+
+      function toggleAdBlockStyle( fn )
+      {
+        this._adBlockStyle.disabled = true;
+        fn();
+        this._adBlockStyle.disabled = false;
+      }
+
+      // setup
+
+      // create element property cache
+      let originalGetPropertyValue = CSSStyleDeclaration.prototype.getPropertyValue;
+      cache = new MirageCache(
+        this.debugEnabled,
+        toggleAdBlockStyle.bind(this),
+        {
+        'offsetTop': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop').get,
+        'offsetLeft': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetLeft').get,
+        'offsetWidth': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth').get,
+        'offsetHeight': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight').get,
+        'offsetParent': Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetParent').get,
+        'clientWidth': Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth').get,
+        'clientHeight': Object.getOwnPropertyDescriptor(Element.prototype, 'clientHeight').get,
+        'visibility': function( ){return originalGetPropertyValue.bind(this, 'visibility')},
+        'display': function( ){return originalGetPropertyValue.bind(this, 'display')},
+        }
+      );
+
+      // register to cache invalidating events
+      new MutationObserver(function( mutations )
+      {
+        mutations.forEach(function( mutation )
+        {
+          mutation.removedNodes.forEach(function( element )
+          {
+            cache.delete(element);
+            checkedElements.delete(element);
+          });
+        });
+        // note: a node was either added, deleted, or had its style modified
+        cache.invalidate();
+      }).observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributeFilter: ['style']
+      });
+
+      // intercept element style related fns
+      // patch HTMLElement
+      if( "HTMLElement" in window )
+      {
+        this._debug("Pathching HTMLElement.{offsetTop,offsetLeft,offsetWidth,offsetHeight,offsetParent}");
+
+        installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetTop');
+        installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetLeft');
+        installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetWidth');
+        installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetHeight');
+        installInterceptedPropertyGetter(cache, HTMLElement.prototype, 'offsetParent');
+      }
+
+      // patch Element
+      if( "Element" in window )
+       {
+        this._debug("Pathching Element.{clientWidth,clientHeight}");
+
+        installInterceptedPropertyGetter(cache, Element.prototype, 'clientWidth');
+        installInterceptedPropertyGetter(cache, Element.prototype, 'clientHeight');
+      }
+
+      // patch CSSStyleDeclaration
+      if( "CSSStyleDeclaration" in window )
+      {
+        this._debug("Pathching CSSStyleDeclaration.getPropertyValue");
+
+        installInterceptedGetPropertyValue(cache, computedToElementMap);
+      }
+
+      // patch window.getComputedStyle
+      if( window.getComputedStyle )
+      {
+        this._debug("Pathching window.getComputedStyle");
+
+        let originalFn = window.getComputedStyle;
+        window.getComputedStyle = function( element )
+        {
+          let computed = originalFn.apply(this, arguments);
+
+          computedToElementMap.set(computed, element);
+
+          return computed;
+        }
+      }
+    }
+
+    run( adBlockStyle, selectors )
+    {
+      this._debug('Running');
+      this._adBlockStyle = adBlockStyle;
+      this.setSelectors(selectors);
+
+      this._enabled = true;
+
+      console.log('[TODO] querySelectorAll')
+      //querySelectorAll('query')
+      //cache.update();
+
+      adBlockStyle.disabled = false;
+    }
+  }
+
+  let mirage = new Mirage(false);
+  mirage.install(originalShadowRoot);
+
+  // run after adblock injects styles
+  new MutationObserver(function( mutations )
+  {
+    let style = originalShadowRoot.getElementById('ABPStyle');
+    if( style )
+    {
+      data = JSON.parse(style.getAttribute('mirageData'));
+
+      // clear data
+      style.removeAttribute('mirageData');
+
+      if( data.enabled )
+      {
+        // note: this should only ever occur once
+        mirage.run(style, data.selectors);
+      }
+    }
+  }).observe(originalShadowRoot, {
+    childList: true
+  });
 }
 
 if (document instanceof HTMLDocument)

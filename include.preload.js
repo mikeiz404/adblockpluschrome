@@ -21,6 +21,7 @@
 
 // This variable is also used by our other content scripts.
 let elemhide;
+let mirageEnabled = false;
 
 const typeMap = new Map([
   ["img", "IMAGE"],
@@ -360,6 +361,7 @@ function ElemHide()
 }
 ElemHide.prototype = {
   selectorGroupSize: 200,
+  miragePrefElement: null,
 
   createShadowTree()
   {
@@ -435,7 +437,7 @@ ElemHide.prototype = {
         i, i + this.selectorGroupSize
       ).join(", ");
       // note: 'display: none' cannot be used as this will prevent the 'ad-detected' animation event from firing.
-      this.style.sheet.insertRule(selector + "{visibility: hidden !important; position: absolute !important; top:-100%; left: -100%; animation-name: ad-detected;}",
+      this.style.sheet.insertRule(selector + "{display: none !important}",
                                   this.style.sheet.cssRules.length);
     }
   },
@@ -485,6 +487,11 @@ ElemHide.prototype = {
     }
   },
 
+  setMirageData(data)
+  {
+    this.style.setAttribute('mirageData', JSON.stringify(data));
+  },
+
   apply()
   {
     ext.backgroundPage.sendMessage({type: "elemhide.getSelectors"}, response =>
@@ -506,6 +513,25 @@ ElemHide.prototype = {
         this.addSelectors(response.selectors);
       else if (this.tracer)
         this.tracer.addSelectors(response.selectors);
+
+      if( this.style )
+      {
+        // note: ideally mirage data would be passed in a better named message
+        // and in a more appropiate location but for a proof of concept this will do
+        let mirageData = {};
+        mirageData.enabled = response.mirageEnabled;
+
+        if( response.mirageEnabled )
+        {
+          mirageData.selectors = response.selectors;
+
+          // note: we need to make sure mirage has been enabled BEFORE the style sheet takes effect.
+          // The style sheet will be enabled after mirage is installed.
+          this.style.disabled = true;
+        }
+
+        this.setMirageData(mirageData);
+      }
 
       this.elemHideEmulation.apply();
     });

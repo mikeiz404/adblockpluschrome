@@ -78,3 +78,7 @@ This means that only the styles which affect the `visibility` state of the ad el
 When an ad element is inspected only the stored `visibility` state needs to be returned.
 
 This approach seems the most difficult and does not allow collapsing of the ad space.
+
+# To Do
+- on every intercepted fn, check if element has been checked. If not, check if ad element and mark. Then proceed to check if element has been marked / is an ad element. This is an alternative to checking every added element and should help with performance. Events (animation and mutation) are not reliable. This will be a fall back as it is less performant.
+- add query selector all and mutation observer for new element or class/id modified
