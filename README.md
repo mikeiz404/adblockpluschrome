@@ -53,13 +53,19 @@ This is much faster than calling `querySelectorAll` on DOM mutations.
 Using this technique means `display: none` cannot be used to hide the ads since an animation event will not be triggered.
 Instead `visibility: hidden` and `position: absolute` are used for element hiding.
 
+## Limitations
+Since ad element detection is being done through asynchronous events (`animationstart`), an ad element is not always detected due to a race condition.
+An element can also have no events fired for it if the element is added and removed from the DOM too quickly. This has not been too big of an issue in the past but recently it has become more noticeable on certain sites.
+This condition becomes much more likely when an ad element is added, inspected, and removed in rapid succession.
+
+Alternative synchronous approaches such as determining if an element is an ad element during inspection causes a noticeable performance impact on complex pages, even with caching.
+Worse still memory usage drastically increases due to the inclusion of the ad blocking selectors on each page/iframe needed for calls to `Element.match()`. It does however work reliably.
 
 # Future Work
-This approach to preventing the detection of element hiding is working pretty well.
+This approach to preventing the detection of element hiding is working well enough for a proof of concept.
 Caching has helped significantly with performance.
-However there is still room for improvement in computing an ad elements unblocked style.
 
-Some options worth exploring are:
+There is much room for improvement here and below are some options worth exploring:
 
 ## Parallel DOM
 A copy of the page's DOM is stored in the shadow root without any ad blocking styles applied.

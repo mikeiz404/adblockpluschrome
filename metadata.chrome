@@ -18,6 +18,7 @@ backgroundScripts = ext/common.js
   lib/adblockplus.js
   messageResponder.js
   background.js
+  mirageconf.js
 testScripts = ../ext/common.js
   ../ext/background.js
   ../lib/compat.js

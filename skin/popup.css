@@ -24,7 +24,8 @@ body.clickhide-active #clickhide-cancel
 
 body.local #enabled,
 body.local #clickhide,
-body.local #stats-page
+body.local #stats-page,
+body.local #mirage
 {
   display: none;
 }
@@ -241,6 +242,63 @@ body.disabled #enabled #enabled-yes
 body.disabled #enabled #enabled-no
 {
   display: inline;
+}
+
+body.disabled #mirage
+{
+  display: none;
+}
+
+#mirage .label, #mirage .info
+{
+  white-space: normal;
+}
+
+#mirage-yes .label strong,
+#mirage-no .label strong
+{
+  font-weight: normal;
+}
+
+#mirage-yes .label strong
+{
+  color: #de6000;
+}
+
+#mirage-no .label strong
+{
+  color: #7800de;
+}
+
+#mirage .info
+{
+  font-size: 11px;
+  font-style: italic;
+}
+
+body.mirage #mirage .icon
+{
+  background-position: -50px -1px;
+}
+
+#mirage .icon
+{
+  background-position: -50px -17px;
+}
+
+#mirage-yes, #mirage-no
+{
+  display: inline-block;
+}
+
+body:not(.mirage) #mirage-no
+{
+  display: none;
+}
+
+body.mirage #mirage-yes
+{
+  display: none;
 }
 
 #clickhide .icon,

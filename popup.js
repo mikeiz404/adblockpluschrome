@@ -26,6 +26,8 @@ const {checkWhitelisted} = require("whitelisting");
 const {getDecodedHostname} = require("url");
 
 let page = null;
+let pageId = null;
+let mirageconf = chrome.extension.getBackgroundPage().mirageconf;
 
 function onLoad()
 {
@@ -63,6 +65,14 @@ function onLoad()
         if (response && response.active)
           document.body.classList.add("clickhide-active");
       });
+
+      console.log('settting mirange enabled: ', mirageconf.isEnabled(page.id));
+      if (mirageconf.isEnabled(page.id))
+        document.body.classList.add("mirage");
+
+      document.getElementById("mirage").addEventListener(
+        "click", () => toggleMirage(page.id), false
+      );
     }
   });
 
@@ -120,6 +130,15 @@ function toggleEnabled()
       filter = checkWhitelisted(page);
     }
   }
+}
+
+function toggleMirage(pageId)
+{
+  let enabled = document.body.classList.toggle("mirage");
+  console.log('enabled: ', enabled);
+  mirageconf.setEnabled(pageId, enabled);
+
+  console.log('toggleMirage()');
 }
 
 function activateClickHide()

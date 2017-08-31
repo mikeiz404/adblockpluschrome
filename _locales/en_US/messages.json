@@ -39,6 +39,22 @@
     "description": "Popup balloon label to disable blocking",
     "message": "<strong>Disabled</strong> on this site"
   },
+  "mirage_disabled_for_tab" : {
+    "description": "Popup balloon label to enable mirage",
+    "message": "\"Mirage\" <strong>Disabled</strong>"
+  },
+  "mirage_disabled_for_tab_info" : {
+    "description": "Info label to enable mirage",
+    "message": "AdBlock Detection is Allowed."
+  },
+  "mirage_enabled_for_tab" : {
+    "description": "Popup balloon label to disable mirage",
+    "message": "\"Mirage\" <strong>Enabled</strong> "
+  },
+  "mirage_enabled_for_tab_info" : {
+    "description": "Info label to enable mirage",
+    "message": "AdBlock Detection is Prevented. Resource blocking is <strong>disabled</strong>."
+  },
   "disabled_for_these_domains": {
     "message": "Adblock Plus is disabled for the domains listed below. You can add a domain either via the Adblock Plus icon in the address bar or by typing the domain (not a URL) in the box and clicking the \"Add domain\" button."
   },
